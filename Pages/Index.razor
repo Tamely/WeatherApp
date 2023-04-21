@@ -1,0 +1,108 @@
+﻿@page "/"
+@using System.Net
+@using System.Text
+@using System.Text.Json
+@using WeatherApp.Models
+
+@inject IJSRuntime _JsRuntime;
+
+<div class="container">
+    <div class="search-box">
+        <i class="fa-solid fa-location-dot"></i>
+        <input type="text" placeholder="Enter your location" @bind="@location">
+        <button class="fa-solid  fa-magnifying-glass" @onclick="@(async() => await GetWeather())"></button>
+    </div>
+    
+    <div class="not-found">
+        <img src="img/404.png">
+        <p>Oops! Invalid location :/</p>
+    </div>
+    
+    <div class="weather-box">
+        <img src="@imgSrc">
+        <p class="temperature">@temperature<span>°F</span></p>
+        <p class="description">@description</p>
+    </div>
+    
+    <div class="weather-details">
+        <div class="humidity">
+            <i class="fa-solid fa-water"></i>
+            <div class="text">
+                <span>@humidity</span>
+                <p>Humidity</p>
+            </div>
+        </div>
+        
+        <div class="wind">
+            <i class="fa-solid fa-wind"></i>
+            <div class="text">
+                <span>@windSpeed</span>
+                <p>Wind Speed</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private const string API_KEY = "c366ae64b3f64baffa2307eeca896d00";
+
+    private string imgSrc = string.Empty;
+    private string location = string.Empty;
+    private string temperature = string.Empty;
+    private string description = string.Empty;
+    private string humidity = string.Empty;
+    private string windSpeed = string.Empty;
+
+    private async Task GetWeather()
+    {
+        if (string.IsNullOrWhiteSpace(location)) return;
+
+        HttpWebRequest req = (HttpWebRequest)WebRequest.Create($"https://api.openweathermap.org/data/2.5/weather?q={location}&units=imperial&appid={API_KEY}");
+        req.Timeout = 5000;
+
+        try
+        {
+            using var res = (HttpWebResponse)req.GetResponse();
+            
+            using var reader = new StreamReader(res.GetResponseStream(), Encoding.UTF8); // Hoping everything will be in plain english!!!
+            string data = await reader.ReadToEndAsync();
+
+            WeatherRoot content = JsonSerializer.Deserialize<WeatherRoot>(data);
+
+            switch (content.Weather[0].Main)
+            {
+                case "Clear":
+                    imgSrc = "img/clear.png";
+                    break;
+                case "Thunderstorm":
+                case "Rain":
+                    imgSrc = "img/rain.png";
+                    break;
+                case "Snow":
+                    imgSrc = "img/snow.png";
+                    break;
+                case "Clouds":
+                    imgSrc = "img/cloud.png";
+                    break;
+                case "Haze":
+                    imgSrc = "img/mist.png";
+                    break;
+                default:
+                    imgSrc = "";
+                    break;
+            }
+
+            location = content.Name;
+            temperature = content.Main.Temp.ToString();
+            description = content.Weather[0].Description;
+            humidity = content.Main.Humidity + "%";
+            windSpeed = content.Wind.Speed + "m/h";
+            
+            await _JsRuntime.InvokeVoidAsync("weather.show");
+        }
+        catch
+        {
+            await _JsRuntime.InvokeVoidAsync("weather.notFound"); // There was an error!
+        }
+    }
+}
